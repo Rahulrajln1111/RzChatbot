@@ -6,6 +6,10 @@ from langchain_ollama import ChatOllama
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph.message import add_messages
 from database import DB_NAME
+from langgraph.prebuilt import ToolNode,tools_condition
+
+from tools import calculator
+
 import sqlite3
 
 
@@ -17,12 +21,18 @@ model = ChatOllama(
 )
 
 
+avail_tools = [calculator]
+model_with_tool = model.bind_tools(avail_tools)
+
+
+
+
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
 def chat_node(state: ChatState):
-    response = model.invoke(state['messages'])
+    response = model_with_tool.invoke(state['messages'])
     return {"messages": [response]}
 
 
@@ -38,7 +48,12 @@ chkpt = SqliteSaver(conn)
 graph = StateGraph(ChatState)
 
 graph.add_node('chat_node', chat_node)
+graph.add_node('tools',ToolNode(avail_tools))
+
 graph.add_edge(START, 'chat_node')
-graph.add_edge('chat_node', END)
+
+graph.add_conditional_edges('chat_node',tools_condition)
+
+graph.add_edge('tools','chat_node')
 
 chatbot = graph.compile(checkpointer=chkpt)
