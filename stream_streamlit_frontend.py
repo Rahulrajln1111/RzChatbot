@@ -1,5 +1,5 @@
 import streamlit as st
-from langchain_core.messages import HumanMessage,SystemMessage,AIMessage
+from langchain_core.messages import HumanMessage,SystemMessage,AIMessage,ToolMessage,AIMessageChunk
 from backend import chatbot,model
 import uuid
 from database import (
@@ -122,14 +122,45 @@ if uinput:
     with st.chat_message('user'):
         st.markdown(uinput)
     
-    with st.chat_message('assistant'):
-        CONFIG={'configurable':{'thread_id':st.session_state['thread_id']}}
-        ai_msg = st.write_stream(
-            msg_chunk.content for msg_chunk,metadata in  chatbot.stream(
-                {'messages':[HumanMessage(content=uinput)]},
-                config=CONFIG,
-                stream_mode='messages'
+    with st.chat_message("assistant"):
+        final_response = ""
+        activity = st.empty()
+        interactive_res = st.empty()
+        with activity.container():
+            with st.status("Working...", expanded=True) as status:
+                tool_output = None
+                CONFIG={'configurable':{'thread_id':st.session_state['thread_id']}}
+                
+                for chunk, metadata in chatbot.stream(
+                    {"messages": [HumanMessage(content=uinput)]},
+                    config=CONFIG,
+                    stream_mode="messages"
+                ):
+
+                    node = metadata.get("langgraph_node")
+
+                    # Tool execution
+                    if node == "tools":
+                        if isinstance(chunk, ToolMessage):
+                            tool_output = chunk.content
+                            st.write("Tool:", chunk.name)
+                            st.code(tool_output)
+
+                    # LLM response
+                    elif node == "chat_node":
+                        if isinstance(chunk, AIMessageChunk):
+                            if chunk.tool_call_chunks:
+                                continue
+
+                            if chunk.content:
+                                final_response += chunk.content
+                                interactive_res.markdown(final_response)
+
+                status.update(
+                    label="Completed",
+                    state="complete",
+                    expanded=False
                 )
-        )
+            activity.empty()
     
-    st.session_state['msg_state'].append({'role':'assistant','msg':ai_msg})
+    st.session_state['msg_state'].append({'role':'assistant','msg':final_response})
