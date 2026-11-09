@@ -8,7 +8,7 @@ from langgraph.graph.message import add_messages
 from database import DB_NAME
 from langgraph.prebuilt import ToolNode,tools_condition
 
-from tools import calculator
+from tools import calculator,search_web
 
 import sqlite3
 
@@ -21,7 +21,7 @@ model = ChatOllama(
 )
 
 
-avail_tools = [calculator]
+avail_tools = [calculator,search_web]
 model_with_tool = model.bind_tools(avail_tools)
 
 
