@@ -91,7 +91,8 @@ for thread_id,title in st.session_state['thread_chat']:
             else:
                 continue
             
-            tmp_msg.append({"role":role,"msg":msg.content})
+            if msg.content:
+                tmp_msg.append({"role":role,"msg":msg.content})
         st.session_state['thread_id'] = thread_id
         st.session_state['msg_state'] = tmp_msg
 
