@@ -106,8 +106,6 @@ If you use a different chat or embedding model, update the model names in `backe
 streamlit run stream_streamlit_frontend.py
 ```
 
-Open http://localhost:8501.
-
 ### Using documents
 
 1. Open or start a chat.
