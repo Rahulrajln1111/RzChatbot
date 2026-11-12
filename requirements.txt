@@ -1,0 +1,16 @@
+python-dotenv
+httpx
+langgraph
+langchain
+langchain-classic
+langchain-ollama
+streamlit
+langgraph-checkpoint-sqlite
+chromadb
+langchain-chroma
+langchain-text-splitters
+langchain-community
+pypdf
+python-docx
+rank-bm25
+sentence-transformers

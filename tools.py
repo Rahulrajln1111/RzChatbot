@@ -5,6 +5,31 @@ from fractions import Fraction
 from decimal import Decimal, localcontext
 from search_client import search_internet
 
+from rag import retrieve, format_context, list_sources
+
+@tool
+def search_documents(query: str) -> str:
+    """Search the user's uploaded documents (PDF/DOCX/TXT) for relevant passages.
+    Use this when the question is about content the user has uploaded.
+    Returns passages with source + page citations."""
+   
+    from rag_state import CURRENT_THREAD_ID
+    tid = CURRENT_THREAD_ID.get()
+    if not tid:
+        return "No active conversation / no documents indexed."
+    results = retrieve(tid, query)
+    return format_context(results)
+ 
+@tool
+def list_indexed_documents() -> str:
+    """List the documents currently indexed for this conversation."""
+    from rag_state import CURRENT_THREAD_ID
+    tid = CURRENT_THREAD_ID.get()
+    if not tid:
+        return "No active conversation."
+    srcs = list_sources(tid)
+    return "\n".join(srcs) if srcs else "No documents indexed yet."
+
 @tool
 def calculator(expression: str) -> str:
     """Calculate mathematical expressions accurately."""

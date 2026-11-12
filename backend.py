@@ -8,10 +8,11 @@ from langgraph.graph.message import add_messages
 from database import DB_NAME
 from langgraph.prebuilt import ToolNode,tools_condition
 
-from tools import calculator,search_web
-
 import sqlite3
 
+from tools import calculator, search_web, search_documents, list_indexed_documents
+from rag_state import CURRENT_THREAD_ID
+ 
 
 model = ChatOllama(
     model='dmtx/qwen3.5-9b-abliterated:latest',
@@ -21,7 +22,8 @@ model = ChatOllama(
 )
 
 
-avail_tools = [calculator,search_web]
+avail_tools = [calculator, search_web, search_documents, list_indexed_documents]
+ 
 model_with_tool = model.bind_tools(avail_tools)
 
 
@@ -64,16 +66,25 @@ IMPORTANT RULES:
    - Be concise and factual.
    - Support important factual claims with sources.
    - Do not claim that you searched unless the tool was executed.
+
+7. DOCUMENTS:
+   - When the user asks about uploaded documents, call search_documents first.
+   - Always cite the source file and page returned by the tool.
+   - If no relevant passage is found, say so instead of guessing.
 """
 
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-def chat_node(state: ChatState):
-    messages = [SystemMessage(content=SYSTEM_PROMPT),*state['messages']]
+
+# In chat_node, set the thread id before invoking the model:
+def chat_node(state: ChatState, config):
+    CURRENT_THREAD_ID.set(config["configurable"]["thread_id"])
+    messages = [SystemMessage(content=SYSTEM_PROMPT), *state["messages"]]
     response = model_with_tool.invoke(messages)
     return {"messages": [response]}
+
 
 
 # LangGraph persistent checkpointer

@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 from langchain_core.messages import HumanMessage,SystemMessage,AIMessage,ToolMessage,AIMessageChunk
 from backend import chatbot,model
@@ -74,6 +76,40 @@ st.sidebar.title("Langraph Chatbot")
 
 if st.sidebar.button("New Chat"):
     reset_chat()
+
+# Document upload / RAG indexing
+st.sidebar.header("Documents")
+
+uploaded = st.sidebar.file_uploader(
+    "Upload PDF / DOCX / TXT",
+    type=["pdf", "docx", "txt", "md"],
+    accept_multiple_files=True,
+)
+
+if uploaded and st.sidebar.button("Index documents"):
+    # A collection is scoped to a conversation, so make sure one exists.
+    if st.session_state["thread_id"] is None:
+        tid = gen_uuid()
+        create_thread(tid)
+        st.session_state["thread_id"] = tid
+
+    os.makedirs(".data/uploads", exist_ok=True)
+    paths = []
+    for f in uploaded:
+        p = os.path.join(".data/uploads", f.name)
+        with open(p, "wb") as fh:
+            fh.write(f.getbuffer())
+        paths.append(p)
+
+    from rag import ingest, list_sources
+
+    n = ingest(st.session_state["thread_id"], paths)
+    st.sidebar.success(f"Indexed {n} chunks")
+    srcs = list_sources(st.session_state["thread_id"])
+    if srcs:
+        st.sidebar.caption(
+            "Indexed: " + ", ".join(os.path.basename(s) for s in srcs)
+        )
 
 st.sidebar.header("My Conversation")
 
