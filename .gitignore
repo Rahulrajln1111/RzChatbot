@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.agents/
+.data/
+.env
+*.db
+*.db-*
+*.bin
+.gdb_history

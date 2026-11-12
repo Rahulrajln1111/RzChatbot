@@ -1,0 +1,10 @@
+.venv
+.agents
+.git
+__pycache__
+*.pyc
+.data/chroma
+.data/uploads
+*.db
+*.db-*
+.env
