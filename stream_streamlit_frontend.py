@@ -77,40 +77,6 @@ st.sidebar.title("Langraph Chatbot")
 if st.sidebar.button("New Chat"):
     reset_chat()
 
-# Document upload / RAG indexing
-st.sidebar.header("Documents")
-
-uploaded = st.sidebar.file_uploader(
-    "Upload PDF / DOCX / TXT",
-    type=["pdf", "docx", "txt", "md"],
-    accept_multiple_files=True,
-)
-
-if uploaded and st.sidebar.button("Index documents"):
-    # A collection is scoped to a conversation, so make sure one exists.
-    if st.session_state["thread_id"] is None:
-        tid = gen_uuid()
-        create_thread(tid)
-        st.session_state["thread_id"] = tid
-
-    os.makedirs(".data/uploads", exist_ok=True)
-    paths = []
-    for f in uploaded:
-        p = os.path.join(".data/uploads", f.name)
-        with open(p, "wb") as fh:
-            fh.write(f.getbuffer())
-        paths.append(p)
-
-    from rag import ingest, list_sources
-
-    n = ingest(st.session_state["thread_id"], paths)
-    st.sidebar.success(f"Indexed {n} chunks")
-    srcs = list_sources(st.session_state["thread_id"])
-    if srcs:
-        st.sidebar.caption(
-            "Indexed: " + ", ".join(os.path.basename(s) for s in srcs)
-        )
-
 st.sidebar.header("My Conversation")
 
 for thread_id,title in st.session_state['thread_chat']:
@@ -133,6 +99,50 @@ for thread_id,title in st.session_state['thread_chat']:
         st.session_state['msg_state'] = tmp_msg
 
 # Main UI
+tid = st.session_state['thread_id']
+
+with st.expander("Documents in this chat", expanded=False):
+    if tid is None:
+        st.caption("Start a message or upload a file to create this session.")
+
+    upload_key = f"uploader_{tid or 'new'}"
+    uploaded = st.file_uploader(
+        "Upload PDF / DOCX / TXT",
+        type=["pdf", "docx", "txt", "md"],
+        accept_multiple_files=True,
+        key=upload_key,
+    )
+
+    if uploaded and st.button("Index documents", key=f"index_{tid or 'new'}"):
+        if st.session_state['thread_id'] is None:
+            new_tid = gen_uuid()
+            create_thread(new_tid)
+            st.session_state['thread_id'] = new_tid
+            st.session_state['thread_chat'] = get_all_threads()
+            tid = new_tid
+
+        os.makedirs(".data/uploads", exist_ok=True)
+        paths = []
+        for f in uploaded:
+            p = os.path.join(".data/uploads", f.name)
+            with open(p, "wb") as fh:
+                fh.write(f.getbuffer())
+            paths.append(p)
+
+        from rag import ingest, list_sources
+
+        n = ingest(tid, paths)
+        st.success(f"Indexed {n} chunks")
+
+    if tid is not None:
+        from rag import list_sources
+
+        srcs = list_sources(tid)
+        if srcs:
+            st.caption(
+                "Indexed: " + ", ".join(os.path.basename(s) for s in srcs)
+            )
+
 for msg in st.session_state['msg_state']:
     with st.chat_message(msg['role']):
         st.markdown(msg['msg'])

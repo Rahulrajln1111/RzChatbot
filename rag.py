@@ -1,13 +1,17 @@
 import os
+from functools import lru_cache
 from typing import List, Dict
- 
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+MODEL_CACHE_DIR = os.getenv("MODEL_CACHE_DIR", os.path.join(_HERE, ".data", "models"))
+os.environ.setdefault("HF_HOME", MODEL_CACHE_DIR)
+os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", MODEL_CACHE_DIR)
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever
 from langchain_core.documents import Document
-from sentence_transformers import CrossEncoder
  
 CHROMA_DIR = ".data/chroma"
 EMBED_MODEL = "nomic-embed-text"
@@ -16,25 +20,37 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
 TOP_K = 6
 CANDIDATES = 20
- 
+
+RERANK_ENABLED = os.getenv("RERANK_ENABLED", "1").lower() not in ("0", "false", "no")
+
 splitter = RecursiveCharacterTextSplitter(
     chunk_size=CHUNK_SIZE,
     chunk_overlap=CHUNK_OVERLAP,
     separators=["\n\n", "\n", ". ", " ", ""],
 )
- 
-embeddings = OllamaEmbeddings(model=EMBED_MODEL)
-reranker = CrossEncoder(RERANK_MODEL)
- 
- 
+
+
+@lru_cache(maxsize=1)
+def get_embeddings():
+    from langchain_ollama import OllamaEmbeddings
+
+    return OllamaEmbeddings(model=EMBED_MODEL)
+
+
+@lru_cache(maxsize=1)
+def get_reranker():
+    from sentence_transformers import CrossEncoder
+
+    return CrossEncoder(RERANK_MODEL)
+
+
 def collection_name(thread_id: str) -> str:
     return f"thread_{thread_id.replace('-', '_')}"
- 
- 
+
 def vector_store(thread_id: str) -> Chroma:
     return Chroma(
         collection_name=collection_name(thread_id),
-        embedding_function=embeddings,
+        embedding_function=get_embeddings(),
         persist_directory=CHROMA_DIR,
     )
  
@@ -126,12 +142,22 @@ def retrieve(thread_id: str, query: str, k: int = TOP_K) -> List[Dict]:
  
     if not candidates:
         return []
- 
+
     # Cross-encoder rerank
-    pairs = [(query, d.page_content) for d in candidates]
-    scores = reranker.predict(pairs)
-    ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
- 
+    ranked = None
+    if RERANK_ENABLED:
+        try:
+            scores = get_reranker().predict(
+                [(query, d.page_content) for d in candidates]
+            )
+            ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+        except Exception:
+            ranked = None
+
+    if ranked is None:
+        n = max(len(candidates), 1)
+        ranked = [(d, 1.0 - i / n) for i, d in enumerate(candidates)]
+
     out = []
     for doc, score in ranked[:k]:
         out.append({
